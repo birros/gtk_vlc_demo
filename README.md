@@ -1,1 +1,0 @@
-gcc -o gtk_player main.c `pkg-config --libs gtk4 libvlc` `pkg-config --cflags gtk4 libvlc` && ./gtk_player
