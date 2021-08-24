@@ -2,8 +2,7 @@
 #include <vlc/vlc.h>
 #include "libvlc_gtkglarea.h"
 
-static void
-activate(GtkApplication *app, gpointer user_data)
+static void activate(GtkApplication *app, gpointer user_data)
 {
   // window
   GtkWidget *window = gtk_application_window_new(app);

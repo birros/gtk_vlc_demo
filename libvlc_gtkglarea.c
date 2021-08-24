@@ -54,13 +54,15 @@ struct Data
   GLuint position_buffer;
   GLuint program;
   GLuint vao;
+  GdkFrameClock *frame_clock;
+  gulong frame_clock_handler;
 };
 
 struct Data *data_new()
 {
-  struct Data *data = malloc(sizeof(struct Data));
+  struct Data *data = (struct Data *)malloc(sizeof(struct Data));
 
-  data->mutex = malloc(sizeof(GMutex));
+  data->mutex = (GMutex *)malloc(sizeof(GMutex));
   data->pixel_buffer = NULL;
   data->area_width = 0;
   data->area_height = 0;
@@ -74,17 +76,7 @@ struct Data *data_new()
   return data;
 }
 
-void data_free(struct Data *data)
-{
-  free(data->mutex);
-  if (data->pixel_buffer != NULL)
-  {
-    free(data->pixel_buffer);
-  }
-}
-
-unsigned
-setup_video(
+unsigned setup_video(
     void **opaque,
     char *chroma,
     unsigned int *width,
@@ -153,7 +145,7 @@ GLuint create_shader(int type, const char *source)
     int log_len;
     glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &log_len);
 
-    char *buffer = g_malloc(log_len + 1);
+    char *buffer = (char *)g_malloc(log_len + 1);
     glGetShaderInfoLog(shader, log_len, NULL, buffer);
 
     g_warning(
@@ -199,7 +191,7 @@ void init_shaders(GLuint *program_out)
     int log_len;
     glGetProgramiv(program, GL_INFO_LOG_LENGTH, &log_len);
 
-    char *buffer = g_malloc(log_len + 1);
+    char *buffer = (char *)g_malloc(log_len + 1);
     glGetProgramInfoLog(program, log_len, NULL, buffer);
 
     g_warning("program linking failure: %s", buffer);
@@ -261,10 +253,10 @@ void realize(GtkGLArea *area, gpointer user_data)
   init_texture(&data->textureId);
 
   // setup area update timer
-  GdkFrameClock *frame_clock = gtk_widget_get_frame_clock(GTK_WIDGET(area));
-  g_signal_connect_swapped(
-      frame_clock, "update", G_CALLBACK(gtk_gl_area_queue_render), area);
-  gdk_frame_clock_begin_updating(frame_clock);
+  data->frame_clock = gtk_widget_get_frame_clock(GTK_WIDGET(area));
+  data->frame_clock_handler = g_signal_connect_swapped(
+      data->frame_clock, "update", G_CALLBACK(gtk_gl_area_queue_render), area);
+  gdk_frame_clock_begin_updating(data->frame_clock);
 }
 
 void resize(
@@ -286,7 +278,8 @@ void unrealize(GtkGLArea *area, gpointer user_data)
   gtk_gl_area_make_current(area);
   glDeleteBuffers(1, &data->position_buffer);
   glDeleteProgram(data->program);
-  data_free(data);
+  g_signal_handler_disconnect(data->frame_clock, data->frame_clock_handler);
+  gdk_frame_clock_end_updating(data->frame_clock);
 }
 
 void set_texture(struct Data *data)
@@ -330,7 +323,7 @@ gboolean render(GtkGLArea *area, GdkGLContext *context, gpointer user_data)
 
   // clear viewport
   glClearColor(0.0, 0.0, 0.0, 1.0);
-  glClear(GL_COLOR_BUFFER_BIT);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   // wait buffer initialization
   g_mutex_lock(data->mutex);
